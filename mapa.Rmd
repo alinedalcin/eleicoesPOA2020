@@ -1,0 +1,177 @@
+---
+title: "Eleições POA 2020"
+output:
+    flexdashboard::flex_dashboard:
+      theme: bootstrap
+---
+
+```{r setup, include=FALSE}
+
+library(flexdashboard)
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(leaflet)
+library(rgdal)
+library(tibble)
+library(htmlwidgets)
+library(htmltools)
+
+neighborhoods <- readOGR("shapefile", "Bairros_2016", encoding = "UTF-8")
+neighborhoods <- spTransform(neighborhoods, CRS("+proj=longlat +datum=WGS84"))
+
+neighborhoods$NOME <- factor(c("LAMI", "BOA VISTA DO SUL", "EXTREMA", "BELÉM NOVO", "SÃO CAETANO", "PONTA GROSSA", "CHAPÉU DO SOL", "LAGEADO", "SERRARIA", "GUARUJÁ", "ABERTA DOS MORROS", "ESPÍRITO SANTO", "HÍPICA", "PITINGA", "CAMPO NOVO", "IPANEMA",  "JARDIM ISABEL",  "PEDRA REDONDA", "RESTINGA",  "VILA CONCEIÇÃO", "SÉTIMO CÉU", "TRISTEZA", "CAMAQUÃ", "VILA NOVA", "BELÉM VELHO", "VILA ASSUNÇÃO", "CAVALHADA", "CASCATA",  "NONOAI", "CRISTAL", "TERESÓPOLIS", "GLÓRIA", "ARQUIPÉLAGO", "CORONEL APARÍCIO BORGES", "VILA JOÃO PESSOA", "VILA SÃO JOSÉ", "SANTA TEREZA", "MEDIANEIRA", "AGRONOMIA", "SANTO ANTÔNIO", "JARDIM BOTÂNICO", "JARDIM DO SALSO", "MENINO DEUS", "JARDIM CARVALHO", "AZENHA", "BOM JESUS", "SANTA CECÍLIA", "SANTANA", "PRAIA DE BELAS", "CIDADE BAIXA", "FARROUPILHA", "BOM FIM", "MORRO SANTANA", "PETRÓPOLIS", "RIO BRANCO", "CHÁCARA DAS PEDRAS", "TRÊS FIGUEIRAS", "BELA VISTA", "JARDIM SABARÁ", "VILA JARDIM", "INDEPENDÊNCIA", "MONTSERRAT", "CENTRO HISTÓRICO", "JARDIM EUROPA", "MÁRIO QUINTANA", "BOA VISTA", "MOINHOS DE VENTO", "AUXILIADORA", "JARDIM LEOPOLDINA", "PASSO DAS PEDRAS", "HIGIENÓPOLIS", "FLORESTA", "VILA IPIRANGA", "JARDIM ITU", "PASSO DA AREIA", "CRISTO REDENTOR", "SANTA MARIA GORETTI", "SÃO GERALDO", "PARQUE SANTA FÉ", "COSTA E SILVA", "RUBEM BERTA", "JARDIM LINDÓIA", "SÃO SEBASTIÃO", "JARDIM SÃO PEDRO", "JARDIM FLORESTA", "SÃO JOÃO", "NAVEGANTES", "SANTA ROSA DE LIMA", "FARRAPOS", "HUMAITÁ", "ANCHIETA", "SARANDI", "LOMBA DO PINHEIRO", "PARTENON"))
+
+banco <- fread("banco.csv")%>%
+  group_by(BAIRRO)%>%
+#  mutate(ranking=rank(desc(freq_cand)))%>%
+#  arrange(ranking, freq_cand)
+  select(BAIRRO, NM_VOTAVEL, freq_cand)%>%
+  spread(NM_VOTAVEL, freq_cand)%>%
+  select(BAIRRO, `MANUELA PINTO VIEIRA D AVILA`, `SEBASTIÃO DE ARAÚJO MELO`, `NELSON MARCHEZAN JÚNIOR`, `JULIANA BRIZOLA`)
+
+neighborhoods_votacao <- merge(neighborhoods, banco, by.x="NOME", by.y="BAIRRO")
+
+gradiente_azul <- colorNumeric(palette = "Blues", domain = seq(15, 60, by=2.5))
+
+gradiente_vermelho <- colorNumeric(palette = "Reds", domain = seq(15, 60, by=2.5))
+
+gradiente_verde <- colorNumeric(palette = "Greens", domain = seq(15, 60, by=2.5))
+
+tag.map.title <- tags$style(HTML("
+  .leaflet-control.map-title { 
+    transform: translate(-50%,20%);
+    position: fixed !important;
+    left: 50%;
+    text-align: center;
+    padding-left: 10px; 
+    padding-right: 10px; 
+    background: rgba(255,255,255,0.75);
+    font-weight: bold;
+    font-size: 20px;
+  }
+"))
+
+title <- tags$div(
+  tag.map.title, HTML("1º colocado em cada bairro")
+)  
+
+banco_2turno <- fread("banco_2turno.csv")%>%
+  group_by(BAIRRO)%>%
+  select(BAIRRO, NM_VOTAVEL, freq_cand)%>%
+  spread(NM_VOTAVEL, freq_cand)
+
+neighborhoods_2turno <- merge(neighborhoods, banco_2turno, by.x="NOME", by.y="BAIRRO")
+
+gradiente_vermelho2 <- colorNumeric(palette = "Reds", domain = seq(40, 75, by=2.5))
+
+gradiente_verde2 <- colorNumeric(palette = "Greens", domain = seq(40, 75, by=2.5))
+
+```
+
+
+Mapa 1º turno
+=====================================
+
+```{r}
+
+leaflet(options = leafletOptions(zoomControl = FALSE, minZoom=10, dragging=TRUE)) %>% 
+  
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      
+      addControl(title, position = "topleft", className="map-title") %>%
+    
+      setMaxBounds(lng1 = -51.2287 + .5, 
+                   lat1 = -30.0277 + .5, 
+                   lng2 =  -51.2287 - .5, 
+                   lat2 =  -30.0277 - .5) %>%
+  
+      addPolygons(data = neighborhoods_votacao, weight = 1, color = "grey", fillOpacity = 0.75,  fillColor=~ifelse(neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR` & neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, gradiente_vermelho(neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`),
+                                                                                                         ifelse(neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`>neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA` & neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`>neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, gradiente_azul(neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`),
+                                                                                                         ifelse(neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA` & neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, gradiente_verde(neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`), "gray"))),                                                                                            
+                    
+popup = ~ifelse(is.na(neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`), paste0(neighborhoods_votacao$NOME, "<br>", "Bairro sem seção eleitoral"),
+  
+                ifelse(neighborhoods_votacao$NOME=="PITINGA", paste0(neighborhoods_votacao$NOME, "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%", "<br>", "Sebastião Melo: ", format(round(neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%", "<br>",  "Juliana Brizola: ", format(round( neighborhoods_votacao$`JULIANA BRIZOLA`, digits=1), nsmall = 1), "%"),
+                
+                ifelse(neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR` & neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO` & neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`>neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, paste0(neighborhoods_votacao$NOME, "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%", "<br>", "Nelson Marchezan Júnior: ", format(round( neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, digits=1), nsmall = 1), "%", "<br>", "Sebastião Melo: ", format(round( neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%"), 
+                
+                ifelse(neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR` & neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO` & neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, paste0(neighborhoods_votacao$NOME, "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%", "<br>", "Sebastião Melo: ", format(round( neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%", "<br>", "Nelson Marchezan Júnior: ", format(round( neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, digits=1), nsmall = 1), "%"),
+          
+                ifelse(neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`>neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA` & neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`>neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, paste0(neighborhoods_votacao$NOME, "<br>", "Nelson Marchezan Júnior: ", format(round( neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, digits=1), nsmall = 1), "%", "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%", "<br>", "Sebastião Melo: ", format(round( neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%"),
+                 
+                ifelse(neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA` & neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR` & neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`>neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`, paste0(neighborhoods_votacao$NOME, "<br>", "Sebastião Melo: ", format(round( neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%", "<br>", "Nelson Marchezan Júnior: ", format(round( neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, digits=1), nsmall = 1), "%", "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%"),
+       
+                ifelse(neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA` & neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR` & neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`>=neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, paste0(neighborhoods_votacao$NOME, "<br>", "Sebastião Melo: ", format(round( neighborhoods_votacao$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%", "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_votacao$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%", "<br>", "Nelson Marchezan Júnior: ", format(round( neighborhoods_votacao$`NELSON MARCHEZAN JÚNIOR`, digits=1), nsmall = 1), "%"),
+                 
+                paste0(neighborhoods_votacao$NOME, "<br>", "Bairro sem seção eleitoral")
+                 
+  ))))))))%>%
+
+          addLegend(data=subset(neighborhoods_votacao, !is.na(`SEBASTIÃO DE ARAÚJO MELO`) & `SEBASTIÃO DE ARAÚJO MELO`>=24), position = "bottomleft", pal = gradiente_verde, values = ~`SEBASTIÃO DE ARAÚJO MELO`, title="% Melo:", labFormat=labelFormat(suffix="%"), bins=c(25, 30, 35, 40, 45, 50, 55)) %>%
+
+          addLegend(data=subset(neighborhoods_votacao, !is.na(`NELSON MARCHEZAN JÚNIOR`) & `NELSON MARCHEZAN JÚNIOR`>=24), position = "bottomleft", pal = gradiente_azul, values = ~`NELSON MARCHEZAN JÚNIOR`, title="% Marchezan:", labFormat=labelFormat(suffix="%"), bins=c(25, 30, 35, 40, 45, 50, 55)) %>%
+
+          addLegend(data=subset(neighborhoods_votacao, !is.na(`MANUELA PINTO VIEIRA D AVILA`) & `MANUELA PINTO VIEIRA D AVILA`>=24), position = "bottomleft", pal = gradiente_vermelho, values = ~`MANUELA PINTO VIEIRA D AVILA`, title="% Manuela:", labFormat=labelFormat(suffix="%"), bins=c(25, 30, 35, 40, 45, 50, 55)) %>%
+
+          htmlwidgets::onRender("function(el, x) {
+        L.control.zoom({ position: 'topright' }).addTo(this)
+    }")
+
+
+```
+
+Mapa 2º turno
+=====================================
+
+```{r}
+
+leaflet(options = leafletOptions(zoomControl = FALSE, minZoom=10, dragging=TRUE)) %>% 
+  
+      addProviderTiles(providers$CartoDB.Positron) %>%
+      
+      addControl(title, position = "topleft", className="map-title") %>%
+    
+      setMaxBounds(lng1 = -51.2287 + .5, 
+                   lat1 = -30.0277 + .5, 
+                   lng2 =  -51.2287 - .5, 
+                   lat2 =  -30.0277 - .5) %>%
+  
+      addPolygons(data = neighborhoods_2turno, weight = 1, color = "grey", fillOpacity = 0.75,  fillColor=~ifelse(neighborhoods_2turno$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`, gradiente_vermelho2(neighborhoods_2turno$`MANUELA PINTO VIEIRA D AVILA`),
+                                                                                                         ifelse(neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_2turno$`MANUELA PINTO VIEIRA D AVILA`, gradiente_verde2(neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`), "gray")),                                                                                      
+popup = ~ifelse(is.na(neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`), paste0(neighborhoods_2turno$NOME, "<br>", "Bairro sem seção eleitoral"),
+  
+                ifelse(neighborhoods_2turno$`MANUELA PINTO VIEIRA D AVILA`>neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`, paste0(neighborhoods_2turno$NOME, "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_2turno$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%", "<br>", "Sebastião Melo: ", format(round( neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%"), 
+                
+                ifelse(neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`>neighborhoods_2turno$`MANUELA PINTO VIEIRA D AVILA`, paste0(neighborhoods_2turno$NOME, "<br>", "Sebastião Melo: ", format(round( neighborhoods_2turno$`SEBASTIÃO DE ARAÚJO MELO`, digits=1), nsmall = 1), "%", "<br>", "Manuela d'Ávila: ", format(round( neighborhoods_2turno$`MANUELA PINTO VIEIRA D AVILA`, digits=1), nsmall = 1), "%"),
+       
+                paste0(neighborhoods_2turno$NOME, "<br>", "Bairro sem seção eleitoral")
+                 
+  ))))%>%
+
+          addLegend(data=subset(neighborhoods_2turno, !is.na(`SEBASTIÃO DE ARAÚJO MELO`) & `SEBASTIÃO DE ARAÚJO MELO`>=49), position = "bottomleft", pal = gradiente_verde2, values = ~`SEBASTIÃO DE ARAÚJO MELO`, title="% Melo:", labFormat=labelFormat(suffix="%"), bins=c(50, 55, 60, 65, 70, 75, 80)) %>%
+
+          addLegend(data=subset(neighborhoods_2turno, !is.na(`MANUELA PINTO VIEIRA D AVILA`) & `MANUELA PINTO VIEIRA D AVILA`>=49), position = "bottomleft", pal = gradiente_vermelho2, values = ~`MANUELA PINTO VIEIRA D AVILA`, title="% Manuela:", labFormat=labelFormat(suffix="%"), bins=c(50, 55, 60, 65, 70, 75, 80)) %>%
+
+          htmlwidgets::onRender("function(el, x) {
+        L.control.zoom({ position: 'topright' }).addTo(this)
+    }")
+
+
+```
+
+
+Ficha Técnica
+=====================================
+
+**FICHA TÉCNICA**  
+
+Para a confecção dos mapas desta página, foram utilizados os dados de votação por seção eleitoral disponíveis no site do TSE ([link](https://www.tse.jus.br/eleicoes/estatisticas/repositorio-de-dados-eleitorais-1/repositorio-de-dados-eleitorais?fbclid=IwAR2vZamxrkEhy2pE1FXjAWYqv09ECqr_xHcAmnGaCfH_1DDmtPZYP2F8-sE)).
+  
+Os endereços das seções eleitorais, disponíveis no site do TRE/RS ([link](https://eleitor.tre-rs.jus.br/locais-votacao/locais?q%5Bzona_numero_eq%5D=&q%5Bmunicipio_id_eq%5D=7994&button=)), foram georreferenciados através do software RStudio. Após o georreferenciamento, se determinou o bairro de cada seção eleitoral de acordo com a lei nº 11.112/2016 – lei que cria, denomina e delimita os bairros da cidade de Porto Alegre, revogando as leis anteriores.  
+  
+No primeiro turno, apenas três candidatos alcançaram a primeira colocação em algum dos bairros: Sebastião Melo (MDB), Manuela D’Ávila (PC do B) e Nelson Marchezan Júnior (PSDB). No mapa de cada um dos turnos, a cor do bairro indica qual dos candidatos foi o primeiro colocado no bairro em questão. 
+
+Além disso, clicando em cima de cada bairro, é possível visualizar o percentual de votos válidos recebidos pelos candidatos. No mapa do primeiro turno, você visualiza o percentual dos três primeiros colocados no bairro em questão. Em todos os bairros, as três primeiras colocações no primeiro turno foram ocupadas por três entre os seguintes candidatos: Sebastião Melo (MDB), Manuela D’Ávila (PC do B), Nelson Marchezan Júnior (PSDB) e Juliana Brizola (PDT). No mapa do segundo turno, você visualiza o percentual dos dois candidatos na disputa.
+  
+Para dúvidas e sugestões, escreva nos comentários.
